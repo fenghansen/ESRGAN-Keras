@@ -18,8 +18,9 @@ My recurrence doesn't use RaGAN due to bugs. I think my code maybe have some bug
 
 What's more, I use DIV2K datasets only. After doing experiments, I'm sure that **'the more high quality data, the better model performance' is TRUE**.
 
-**the examples of my ESRGAN(without RaGAN)**
-
-![Baboon in Set14](https://github.com/fenghansen/ESRGAN-Keras/blob/master/img_001_SRF_4_HR-Epoch99000.png) 
-
-![Zebra in Set14](https://github.com/fenghansen/ESRGAN-Keras/blob/master/img_014_SRF_4_HR-Epoch99000.png) 
+**the examples of my ESRGAN(without RaGAN)**  
+#### Baboon in Set14
+![Baboon in Set14](https://github.com/fenghansen/ESRGAN-Keras/blob/master/img_001_SRF_4_HR-Epoch99000.png)  
+#### Zebra in Set14
+![Zebra in Set14](https://github.com/fenghansen/ESRGAN-Keras/blob/master/img_014_SRF_4_HR-Epoch99000.png)  
+**Other pictures' PSNR and SSIM is higher than these, but I think it is more clear. Don't mind it too much if you don't want to use it on security field and medical field.**  
