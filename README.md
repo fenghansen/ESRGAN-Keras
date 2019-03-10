@@ -3,7 +3,10 @@
 
 ### It was programed based on https://github.com/MathiasGruber/SRGAN-Keras, and refered from https://github.com/SavaStevanovic/ESRGAN
 
-*Now it is not finished, there are several bugs, so please don't directly use ESRGAN.py. You'd butter only regard it as a reference!!*
+***It is not finished totally, there are several bugs, so please don't directly use ESRGAN.py. 
+You'd butter only regard it as a reference!!! Especially the weights of losses!!
+I really don't know which number is able to use.  
+=_= -> QAQ -> orz***
 
 I have upload the weights of my generator model(RRDB). You can use it after copying my generator model code. If you don't copy the model code, it may report some errors beacause I used 'tf.xxx' in my model.
 
