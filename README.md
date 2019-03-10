@@ -3,10 +3,12 @@
 
 ### It was programed based on https://github.com/MathiasGruber/SRGAN-Keras, and refered from https://github.com/SavaStevanovic/ESRGAN
 
-***It is not finished totally, there are several bugs, so please don't directly use ESRGAN.py. 
-You'd butter only regard it as a reference!!! Especially the weights of losses!!
+***It is not finished totally, there are several bugs, so please don't directly use ESRGAN.py.   
+You'd butter only regard it as a reference!!! Especially the weights of losses!!  
 I really don't know which number is able to use.  
 =_= -> QAQ -> orz***
+
+#### Environment: Python 3.6 + Keras 2.2.4 + Tensorflow 1.12 + PyCharm 2018
 
 I have upload the weights of my generator model(RRDB). You can use it after copying my generator model code. If you don't copy the model code, it may report some errors beacause I used 'tf.xxx' in my model.
 
