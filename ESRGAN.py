@@ -1,4 +1,5 @@
 #! /usr/bin/python
+# ! /usr/bin/python
 import os
 import sys
 import pickle
@@ -13,15 +14,16 @@ import tensorflow as tf
 from keras.models import Sequential, Model, load_model
 from keras.layers import Input, Activation, Add, Concatenate, Multiply
 from keras.layers import BatchNormalization, LeakyReLU, PReLU, Conv2D, Dense
-from keras.layers import UpSampling2D, Lambda
+from keras.layers import UpSampling2D, Lambda, Dropout
 from keras.optimizers import Adam
 from keras.applications.vgg19 import preprocess_input
 from keras.utils.data_utils import OrderedEnqueuer
 from keras import backend as K
 from keras.callbacks import TensorBoard, ModelCheckpoint, LambdaCallback
+
 sys.stderr = stderr
 from vgg19_noAct import VGG19
-from util import DataLoader, plot_test_images
+from util import DataLoader, plot_test_images, plot_bigger_images
 
 
 class SRGAN():
@@ -31,15 +33,16 @@ class SRGAN():
     https://arxiv.org/abs/1609.04802
     """
 
-    def __init__(self, 
-        height_lr=32, width_lr=32, channels=3,
-        upscaling_factor=4, 
-        gen_lr=1e-4, dis_lr=1e-4, 
-        # VGG scaled with 1/12.75 as in paper
-        # loss_weights={'percept':1,'gen':5e-3, 'pixel':1e-2},
-        training_mode=True
-    ):
-        """        
+    def __init__(self,
+                 height_lr=32, width_lr=32, channels=3,
+                 upscaling_factor=4,
+                 gen_lr=1e-4, dis_lr=1e-4,
+                 # VGG scaled with 1/12.75 as in paper
+                 # loss_weights={'percept':1,'gen':5e-3, 'pixel':1e-2},
+                 training_mode=True,
+                 refer_model=None,
+                 ):
+        """
         :param int height_lr: Height of low-resolution images
         :param int width_lr: Width of low-resolution images
         :param int channels: Image channels
@@ -47,7 +50,7 @@ class SRGAN():
         :param int gen_lr: Learning rate of generator
         :param int dis_lr: Learning rate of discriminator
         """
-        
+
         # Low-resolution image dimensions
         self.height_lr = height_lr
         self.width_lr = width_lr
@@ -67,17 +70,18 @@ class SRGAN():
         # Learning rates
         self.gen_lr = gen_lr
         self.dis_lr = dis_lr
-        
+
         # Scaling of losses
-        self.loss_weights = {'percept': 1, 'gen': 5e-3, 'pixel': 1e-2}
+        self.loss_weights = {'percept': 1e-3, 'gen': 5e-3, 'pixel': 1e-2}
 
         # Gan setup settings
-        self.gan_loss = 'mae'
+        self.gan_loss = 'mse'
         self.dis_loss = 'binary_crossentropy'
-        
+
         # Build & compile the generator network
         self.generator = self.build_generator()
         self.compile_generator(self.generator)
+        self.refer_model = refer_model
 
         # If training, build rest of GAN network
         if training_mode:
@@ -99,12 +103,12 @@ class SRGAN():
             self.generator.load_weights(generator_weights, **kwargs)
         if discriminator_weights:
             self.discriminator.load_weights(discriminator_weights, **kwargs)
-            
+
     def SubpixelConv2D(self, name, scale=2):
         """
         Keras layer to do subpixel convolution.
         NOTE: Tensorflow backend only. Uses tf.depth_to_space
-        
+
         :param scale: upsampling scale compared to input_shape. Default=2
         :return:
         """
@@ -139,16 +143,16 @@ class SRGAN():
         # Create model and compile
         model = Model(inputs=img, outputs=vgg(img))
         model.trainable = False
-        return model    
-    
+        return model
+
     def preprocess_vgg(self, x):
         """Take a HR image [-1, 1], convert to [0, 255], then to input for VGG network"""
         if isinstance(x, np.ndarray):
-            return preprocess_input((x+1)*127.5)
-        else:            
-            return Lambda(lambda x: preprocess_input(tf.add(x, 1) * 127.5))(x)     
+            return preprocess_input((x + 1) * 127.5)
+        else:
+            return Lambda(lambda x: preprocess_input(tf.add(x, 1) * 127.5))(x)
 
-    def build_generator(self,):
+    def build_generator(self, ):
         """
         Build the generator network according to description in the paper.
         :return: the compiled model
@@ -169,7 +173,7 @@ class SRGAN():
 
             x4 = Conv2D(64, kernel_size=3, strides=1, padding='same')(x3)
             x4 = LeakyReLU(0.2)(x4)
-            x4 = Concatenate()([input, x1, x2, x3, x4])     # 这里跟论文原图有冲突，论文没x3???
+            x4 = Concatenate()([input, x1, x2, x3, x4])  # 这里跟论文原图有冲突，论文没x3???
 
             x5 = Conv2D(64, kernel_size=3, strides=1, padding='same')(x4)
             x5 = Lambda(lambda x: x * 0.2)(x5)
@@ -185,9 +189,9 @@ class SRGAN():
             return out
 
         def upsample(x, number):
-            x = Conv2D(256, kernel_size=3, strides=1, padding='same', name='upSampleConv2d_'+str(number))(x)
-            x = self.SubpixelConv2D('upSampleSubPixel_'+str(number), 2)(x)
-            x = PReLU(shared_axes=[1,2], name='upSamplePReLU_'+str(number))(x)
+            x = Conv2D(256, kernel_size=3, strides=1, padding='same', name='upSampleConv2d_' + str(number))(x)
+            x = self.SubpixelConv2D('upSampleSubPixel_' + str(number), 2)(x)
+            x = PReLU(shared_axes=[1, 2], name='upSamplePReLU_' + str(number))(x)
             return x
 
         # Input low resolution image
@@ -204,7 +208,7 @@ class SRGAN():
         x = Conv2D(64, kernel_size=3, strides=1, padding='same')(x)
         x = Lambda(lambda x: x * 0.2)(x)
         x = Add()([x, x_start])
-        
+
         # Upsampling depending on factor
         x = upsample(x, 1)
         if self.upscaling_factor > 2:
@@ -219,12 +223,11 @@ class SRGAN():
         # Create model and compile
         model = Model(inputs=lr_input, outputs=hr_output)
         # model.summary()
-        return model    
+        return model
 
     def build_discriminator(self, filters=64):
         """
         Build the discriminator network according to description in the paper.
-
         :param optimizer: Keras optimizer to use for network
         :param int filters: How many filters to use in first conv layer
         :return: the compiled model
@@ -241,14 +244,15 @@ class SRGAN():
         img = Input(shape=self.shape_hr)
         x = conv2d_block(img, filters, bn=False)
         x = conv2d_block(x, filters, strides=2)
-        x = conv2d_block(x, filters*2)
-        x = conv2d_block(x, filters*2, strides=2)
-        x = conv2d_block(x, filters*4)
-        x = conv2d_block(x, filters*4, strides=2)
-        x = conv2d_block(x, filters*8)
-        x = conv2d_block(x, filters*8, strides=2)
-        x = Dense(filters*16)(x)
+        x = conv2d_block(x, filters * 2)
+        x = conv2d_block(x, filters * 2, strides=2)
+        x = conv2d_block(x, filters * 4)
+        x = conv2d_block(x, filters * 4, strides=2)
+        x = conv2d_block(x, filters * 8)
+        x = conv2d_block(x, filters * 8, strides=2)
+        x = Dense(filters * 16)(x)
         x = LeakyReLU(alpha=0.2)(x)
+        x = Dropout(0.4)(x)
         x = Dense(1)(x)
 
         # Create model and compile
@@ -262,15 +266,15 @@ class SRGAN():
             # Compute the Perceptual loss
             gen_feature = self.vgg(self.preprocess_vgg(generated_hr))
             ori_feature = self.vgg(self.preprocess_vgg(img_hr))
-            percept_loss =tf.losses.absolute_difference(gen_feature, ori_feature)
+            percept_loss = tf.losses.mean_squared_error(gen_feature, ori_feature)
             # Compute the RaGAN loss
-            fake_logit, real_logit, _ = self.RaGAN([img_hr, generated_hr])
-            gen_loss = tf.reduce_mean(
-                tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.zeros_like(real_logit), logits=real_logit) +
-                tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.ones_like(fake_logit), logits=fake_logit))
+            fake_logit, real_logit = self.RaGAN([img_hr, generated_hr])
+            gen_loss = K.mean(
+                K.binary_crossentropy(K.zeros_like(real_logit), real_logit) +
+                K.binary_crossentropy(K.ones_like(fake_logit), fake_logit))
             # Compute the pixel_loss with L1 loss
-            pixel_loss = tf.losses.absolute_difference(generated_hr, img_hr)
-            return [percept_loss, gen_loss, pixel_loss]
+            # pixel_loss = tf.losses.absolute_difference(generated_hr, img_hr)
+            return [percept_loss, gen_loss]
 
         # Input LR images
         img_lr = Input(self.shape_lr)
@@ -284,19 +288,19 @@ class SRGAN():
 
         # Output tensors to a Model must be the output of a Keras `Layer`
         total_loss = Lambda(comput_loss, name='comput_loss')([img_hr, generated_hr])
-        percept_loss = Lambda(lambda x: self.loss_weights['percept']*x, name='percept_loss')(total_loss[0])
-        gen_loss = Lambda(lambda x: self.loss_weights['gen']*x, name='gen_loss')(total_loss[1])
-        pixel_loss = Lambda(lambda x: self.loss_weights['pixel']*x, name='pixel_loss')(total_loss[2])
+        percept_loss = Lambda(lambda x: self.loss_weights['percept'] * x, name='percept_loss')(total_loss[0])
+        gen_loss = Lambda(lambda x: self.loss_weights['gen'] * x, name='gen_loss')(total_loss[1])
+        # pixel_loss = Lambda(lambda x: self.loss_weights['pixel'] * x, name='pixel_loss')(total_loss[2])
         # loss = Lambda(lambda x: x[0]+x[1]+x[2], name='total_loss')(total_loss)
 
         # Create model
-        model = Model(inputs=[img_lr, img_hr], outputs=[percept_loss, gen_loss, pixel_loss])
+        model = Model(inputs=[img_lr, img_hr], outputs=[percept_loss, gen_loss])
 
         # Add the loss of model and compile
         # model.add_loss(loss)
         model.add_loss(percept_loss)
         model.add_loss(gen_loss)
-        model.add_loss(pixel_loss)
+        # model.add_loss(pixel_loss)
         model.compile(optimizer=Adam(self.gen_lr))
 
         # Create metrics of ESRGAN
@@ -304,19 +308,20 @@ class SRGAN():
         model.metrics_tensors.append(percept_loss)
         model.metrics_names.append('gen_loss')
         model.metrics_tensors.append(gen_loss)
-        model.metrics_names.append('pixel_loss')
-        model.metrics_tensors.append(pixel_loss)
+        # model.metrics_names.append('pixel_loss')
+        # model.metrics_tensors.append(pixel_loss)
         return model
 
     def build_RaGAN(self):
+        def interpolating(x):
+            u = K.random_uniform((K.shape(x[0])[0],) + (1,) * (K.ndim(x[0]) - 1))
+            return x[0] * u + x[1] * (1 - u)
+
         def comput_loss(x):
             real, fake = x
-            fake_logit = (fake - tf.reduce_mean(real))
-            real_logit = (real - tf.reduce_mean(fake))
-            discriminator_loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.zeros_like(
-                fake_logit), logits=fake_logit) + tf.nn.sigmoid_cross_entropy_with_logits(
-                labels=tf.ones_like(real_logit), logits=real_logit))
-            return [fake_logit, real_logit, discriminator_loss]
+            fake_logit = (fake - K.mean(real))
+            real_logit = (real - K.mean(fake))
+            return [fake_logit, real_logit]
 
         # Input LR images
         imgs_hr = Input(self.shape_hr)
@@ -325,14 +330,28 @@ class SRGAN():
         real_discriminator_logits = self.discriminator(imgs_hr)
         fake_discriminator_logits = self.discriminator(generated_hr)
 
+        # x_inter = Lambda(interpolating)([imgs_hr, generated_hr])
+        # x_inter_score = self.discriminator(x_inter)
+
         total_loss = Lambda(comput_loss, name='comput_loss')([real_discriminator_logits, fake_discriminator_logits])
         # print(len(total_loss),total_loss)
         # Output tensors to a Model must be the output of a Keras `Layer`
         fake_logit = Lambda(lambda x: x, name='fake_logit')(total_loss[0])
         real_logit = Lambda(lambda x: x, name='real_logit')(total_loss[1])
-        dis_loss = Lambda(lambda x: x, name='discriminator_loss')(total_loss[2])
 
-        model = Model(inputs=[imgs_hr, generated_hr], outputs=[fake_logit, real_logit, dis_loss])
+        # grads = K.gradients(x_inter_score, [x_inter])[0]
+        # print(x_inter)
+        # print(x_inter_score)
+        # print(grads)
+        # grad_norms = K.sqrt(K.sum(grads ** 2, list(range(1, K.ndim(grads)))) + 1e-9)
+        dis_loss = K.mean(K.binary_crossentropy(K.zeros_like(fake_logit), fake_logit) +
+                          K.binary_crossentropy(K.ones_like(real_logit), real_logit))
+        # dis_loss = tf.reduce_mean(
+        #     tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.zeros_like(fake_logit), logits=fake_logit) +
+        #     tf.nn.sigmoid_cross_entropy_with_logits(labels=tf.ones_likes(real_logit), logits=real_logit))
+        # dis_loss = K.mean(- (real_logit - fake_logit)) + 10 * K.mean((grad_norms - 1) ** 2)
+
+        model = Model(inputs=[imgs_hr, generated_hr], outputs=[fake_logit, real_logit])
 
         model.add_loss(dis_loss)
         model.compile(optimizer=Adam(self.dis_lr))
@@ -371,35 +390,34 @@ class SRGAN():
             loss=None,
             optimizer=Adam(self.gen_lr, 0.9, 0.999)
         )
-    
+
     def PSNR(self, y_true, y_pred):
         """
         PSNR is Peek Signal to Noise Ratio, see https://en.wikipedia.org/wiki/Peak_signal-to-noise_ratio
-
         The equation is:
         PSNR = 20 * log10(MAX_I) - 10 * log10(MSE)
-        
+
         Since input is scaled from -1 to 1, MAX_I = 1, and thus 20 * log10(1) = 0. Only the last part of the equation is therefore neccesary.
         """
-        return -10.0 * K.log(K.mean(K.square(y_pred - y_true))) / K.log(10.0) 
-    
+        return -10.0 * K.log(K.mean(K.square(y_pred - y_true))) / K.log(10.0)
+
     def train_generator(self,
         epochs, batch_size,
         workers=1,
-        dataname='train_gen',
+        dataname='doctor',
         datapath_train='./images/train_dir',
         datapath_validation='./images/val_dir',
         datapath_test='./images/val_dir',
         steps_per_epoch=1000,
         steps_per_validation=1000,
-        crops_per_image=1,
-        log_weight_path='./data/weights/', 
+        crops_per_image=2,
+        log_weight_path='./data/weights/',
         log_tensorboard_path='./data/logs/',
-        log_tensorboard_name='SR-RRDB',
+        log_tensorboard_name='SR-RRDB-D',
         log_tensorboard_update_freq=1,
-        log_test_path="./images/samples/"
-    ):
-        """Trains the generator part of the network with MSE loss"""        
+        log_test_path="./images/samples-d/"
+        ):
+        """Trains the generator part of the network with MSE loss"""
 
         # Create data loaders
         train_loader = DataLoader(
@@ -418,7 +436,7 @@ class SRGAN():
             )
 
         self.gen_lr = 3.2e-5
-        for step in range(12, epochs//10+12):
+        for step in range(epochs // 10):
             self.compile_generator(self.generator)
             # Callback: tensorboard
             callbacks = []
@@ -452,8 +470,8 @@ class SRGAN():
                         test_loader,
                         datapath_test,
                         log_test_path,
-                        epoch + step*10,
-                        name='RRDB'
+                        epoch + step * 10,
+                        name='RRDB-D'
                     )
                 )
                 callbacks.append(testplotting)
@@ -466,46 +484,44 @@ class SRGAN():
                 validation_data=test_loader,
                 validation_steps=steps_per_validation,
                 callbacks=callbacks,
-                use_multiprocessing=workers>1,
+                use_multiprocessing=workers > 1,
                 workers=workers
             )
-            self.generator.save('./data/weights/DIV2K_gan(Step %dK).h5' % (step*10+10))
+            self.generator.save('./data/weights/Doctor_gan(Step %dK).h5' % (step * 10 + 10))
             self.gen_lr /= 1.149
             print(step, self.gen_lr)
 
-
-    def train_srgan(self, 
-        epochs, batch_size, 
-        dataname, 
+    def train_srgan(self,
+        epochs, batch_size,
+        dataname,
         datapath_train,
-        datapath_validation=None, 
+        datapath_validation=None,
         steps_per_validation=10,
-        datapath_test=None, 
+        datapath_test=None,
         workers=40, max_queue_size=100,
         first_epoch=0,
         print_frequency=2,
-        crops_per_image=1,
-        log_weight_frequency=500,
-        log_weight_path='./data/weights/', 
+        crops_per_image=2,
+        log_weight_frequency=1000,
+        log_weight_path='./data/weights/',
         log_tensorboard_path='./data/logs/',
         log_tensorboard_name='SRGAN',
         log_tensorboard_update_freq=500,
         log_test_frequency=500,
-        log_test_path="./images/samples/",         
-    ):
+        log_test_path="./images/samples/",
+        ):
         """Train the ESRGAN network
-
         :param int epochs: how many epochs to train the network for
         :param str dataname: name to use for storing model weights etc.
         :param str datapath_train: path for te image files to use for training
         :param str datapath_test: path for the image files to use for testing / plotting
         :param int print_frequency: how often (in epochs) to print progress to terminal. Warning: will run validation inference!
         :param int log_weight_frequency: how often (in epochs) should network weights be saved. None for never
-        :param int log_weight_path: where should network weights be saved        
+        :param int log_weight_path: where should network weights be saved
         :param int log_test_frequency: how often (in epochs) should testing & validation be performed
         :param str log_test_path: where should test results be saved
         :param str log_tensorboard_path: where should tensorflow logs be sent
-        :param str log_tensorboard_name: what folder should tf logs be saved under        
+        :param str log_tensorboard_name: what folder should tf logs be saved under
         """
 
         # Create train data loader
@@ -547,7 +563,7 @@ class SRGAN():
         #     tensorboard.set_model(self.srgan)
         # else:
         #     print(">> Not logging to tensorboard since no log_tensorboard_path is set")
-        
+
         # Callback: format input value
         # def named_logs(model, logs):
         #     """Transform train_on_batch return value to dict expected by on_batch_end callback"""
@@ -565,21 +581,20 @@ class SRGAN():
         # real = np.ones(disciminator_output_shape)
         # fake = np.zeros(disciminator_output_shape)
 
-        # Each epoch == "update iteration" as defined in the paper        
+        # Each epoch == "update iteration" as defined in the paper
         print_losses = {"G": [], "D": []}
         start_epoch = datetime.datetime.now()
-        
+
         # Random images to go through
-        idxs = np.random.randint(0, len(loader), epochs)        
-        
+        idxs = np.random.randint(0, len(loader), epochs)
+
         # Loop through epochs / iterations
-        for epoch in range(first_epoch, epochs+first_epoch):
-            print(epoch)
+        for epoch in range(first_epoch, epochs + first_epoch):
             # Start epoch time
             if epoch % print_frequency == 1:
-                start_epoch = datetime.datetime.now()            
+                start_epoch = datetime.datetime.now()
 
-            # Train discriminator   
+                # Train discriminator
             imgs_lr, imgs_hr = next(output_generator)
             generated_hr = self.generator.predict(imgs_lr)
             # SRGAN's loss (don't use them)
@@ -598,7 +613,7 @@ class SRGAN():
             # logs = named_logs(self.srgan, generator_loss)
             # tensorboard.on_epoch_end(epoch, logs)
             # print(generator_loss, discriminator_loss)
-            # Save losses            
+            # Save losses
             print_losses['G'].append(generator_loss)
             print_losses['D'].append(discriminator_loss)
 
@@ -609,7 +624,7 @@ class SRGAN():
                 print(self.srgan.metrics_names, g_avg_loss)
                 print(self.RaGAN.metrics_names, d_avg_loss)
                 print("\nEpoch {}/{} | Time: {}s\n>> Generator/GAN: {}\n>> Discriminator: {}".format(
-                    epoch, epochs+first_epoch,
+                    epoch, epochs + first_epoch,
                     (datetime.datetime.now() - start_epoch).seconds,
                     ", ".join(["{}={:.4f}".format(k, v) for k, v in zip(self.srgan.metrics_names, g_avg_loss)]),
                     ", ".join(["{}={:.4f}".format(k, v) for k, v in zip(self.RaGAN.metrics_names, d_avg_loss)])
@@ -631,7 +646,7 @@ class SRGAN():
             # If test images are supplied, run model on them and save to log_test_path
             if datapath_test and epoch % log_test_frequency == 0:
                 print(">> Ploting test images")
-                plot_test_images(self, loader, datapath_test, log_test_path, epoch)
+                plot_test_images(self, loader, datapath_test, log_test_path, epoch, refer_model=self.refer_model)
 
             # Check if we should save the network weights
             if log_weight_frequency and epoch % log_weight_frequency == 0:
@@ -641,10 +656,11 @@ class SRGAN():
 
     def test(self,
         refer_model=None,
-        batch_size=4,
+        batch_size=1,
         datapath_test='./images/val_dir',
         crops_per_image=1,
-        log_test_path="./images/test/"
+        log_test_path="./images/test/",
+        model_name='',
     ):
         """Trains the generator part of the network with MSE loss"""
 
@@ -656,44 +672,57 @@ class SRGAN():
             crops_per_image
         )
         print(">> Ploting test images")
-        plot_test_images(self, loader, datapath_test, log_test_path, -1, refer_model=refer_model)
+        if self.refer_model is not None:
+            refer_model = self.refer_model
+        e = -1
+        if len(model_name)>27:
+            e = int(model_name[24:-3])
+            print(e)
+        plot_bigger_images(self, loader, datapath_test, log_test_path, e, refer_model=refer_model)
 
 
 # Run the SRGAN network
 if __name__ == '__main__':
 
     # Instantiate the SRGAN object
+    # RDDB = SRGAN(training_mode=False)
+    # RDDB.generator.load_weights('./data/weights/DIV2K_gan.h5')
+
     print(">> Creating the ESRGAN network")
-    gan = SRGAN(gen_lr=1e-4, dis_lr=1e-4)
-
+    gan = SRGAN(training_mode=True,
+                # refer_model=RDDB.generator,
+                # gen_lr=1e-4, dis_lr=1e-4,
+                )
+    gan.generator.load_weights(r'.\data\weights\Doctor_generator_4X_epoch40000.h5')
+    gan.test()
     # # Stage1: Train the generator with RRDB fisrt
+    # gan.generator.load_weights('./data/weights/DIV2K_gan.h5')
     # gan.train_generator(
-    #     epochs=40,
-    #     batch_size=64,
+    #     epochs=50,
+    #     batch_size=16,
+    #     datapath_train='../datasets/srgan_train',
     # )
-
-    # gan.generator.save('./data/weights/DIV2K_gan.h5')
+    #
+    # gan.generator.save('./data/weights/Doctor_gan.h5')
     # gan.save_weights('./data/weights/')
     # Load previous imagenet weights
-    print(">> Loading old weights")
-    # sr = SRGAN()
-    # sr.generator.load_weights('./data/weights/DIV2K_gan(Step 120K).h5')
-    # # sr.load_weights('./DIV2K_generator_4X_epoch71500.h5')
-    # gan.test(refer_model=sr.generator)
+    # print(">> Loading old weights")
 
-    gan.load_weights('./data/weights/_generator_4X_epochNone.h5', './data/weights/_discriminator_4X_epochNone.h5')
-    # gan.generator.load_weights('./data/weights/DIV2K_gan(Step 160K).h5')
+    # gan.load_weights('./data/weights/DIV2K_generator_4X_epoch65000.h5',
+    #                  './data/weights/DIV2K_discriminator_4X_epoch65000.h5')
+    # gan.generator.load_weights('./data/weights/DIV2K_generator_4X_epoch65000.h5')
 
     # Stage2: Train the ESRGAN with percept_loss, gen_loss and pixel_loss
-    gan.train_srgan(
-        epochs=20,
-        first_epoch=0,
-        batch_size=64,
-        dataname='DIV2K',
-        datapath_train='./images/train_dir/',
-        # datapath_validation='./images/DIV2K_valid_HR/',
-        datapath_test='./images/val_dir/',
-        print_frequency=2,
-    )
-    gan.save_weights('./data/weights/')
+    # gan.train_srgan(
+    #     epochs=50000,
+    #     first_epoch=0,
+    #     batch_size=32,
+    #     dataname='DIV2K',
+    #     datapath_train='../datasets/DIV2K_224/',
+    #     # datapath_train='../datasets/DIV2K_train_224_data.h5',
+    #     # datapath_validation='./images/DIV2K_valid_HR/',
+    #     datapath_test='./images/val_dir/',
+    #     print_frequency=50,
+    # )
+    # gan.save_weights('./data/weights/')
 
