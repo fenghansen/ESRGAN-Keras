@@ -10,7 +10,11 @@ I have upload the weights of my generator model(RRDB). You can use it after copy
 To be honest, I recommand you to train your own discriminator due to the discriminator has several types and visions, and I'm not sure which one is better. You can add a Dropout(0.4) layer at the last of the discriminator to keep the train process stable.
 
 My recurrence doesn't use RaGAN due to bugs. I think my code maybe have some bugs I couldn't understand.
+
 What's more, I use DIV2K datasets only. After doing experiments, I'm sure that **'the more high quality data, the better model performance' is TRUE**.
+
 **the examples of my ESRGAN(without RaGAN)**
+
 ![Baboon in Set14](https://github.com/fenghansen/ESRGAN-Keras/blob/master/img_001_SRF_4_HR-Epoch99000.png) 
+
 ![Zebra in Set14](https://github.com/fenghansen/ESRGAN-Keras/blob/master/img_014_SRF_4_HR-Epoch99000.png) 
