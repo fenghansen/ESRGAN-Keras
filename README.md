@@ -1,8 +1,7 @@
 # ESRGAN-Keras
-### Recurring the ESRGAN(https://arxiv.org/abs/1809.00219) with Keras
-
-### It was programed based on https://github.com/MathiasGruber/SRGAN-Keras, and refered from https://github.com/SavaStevanovic/ESRGAN
-
+### Recurring the ESRGAN(https://arxiv.org/abs/1809.00219) with Keras  
+### It was programed based on https://github.com/MathiasGruber/SRGAN-Keras, and refered from https://github.com/SavaStevanovic/ESRGAN  
+#### I deleted the old weights and managed to upload another one at June 1st, but shadowsocks is forbidden(=_=). What a pity....
 ***It is not finished totally, there are several bugs, so please don't directly use ESRGAN.py.   
 You'd butter only regard it as a reference!!! Especially the weights of losses!!  
 I really don't know which number is able to use.  
