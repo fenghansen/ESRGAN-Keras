@@ -7,7 +7,7 @@ You'd butter only regard it as a reference!!! Especially the weights of losses!!
 I really don't know which number is able to use.  
 =_= -> QAQ -> orz***
 
-#### Environment: Python 3.6 + Keras 2.2.4 + Tensorflow 1.12 + PyCharm 2018
+### Environment: Python 3.6 + Keras 2.2.4 + Tensorflow 1.12 + PyCharm 2018
 
 I have upload the weights of my generator model(RRDB). You can use it after copying my generator model code. If you don't copy the model code, it may report some errors beacause I used 'tf.xxx' in my model.
 
@@ -17,7 +17,8 @@ My recurrence doesn't use RaGAN due to bugs. I think my code maybe have some bug
 
 What's more, I use DIV2K datasets only. After doing experiments, I'm sure that **'the more high quality data, the better model performance' is TRUE**.
 
-**the examples of my ESRGAN(without RaGAN)**
+**the examples of my ESRGAN (without RaGAN)**  
+Don't mind the name of the third subtitle 'SRGAN'. It should be 'ESRGAN' (I forgot to change at that time).
 #### Baboon in Set14
 ![Baboon in Set14](https://github.com/fenghansen/ESRGAN-Keras/blob/master/img_001_SRF_4_HR-Epoch99000.png)  
 #### Zebra in Set14
@@ -30,6 +31,6 @@ What's more, I use DIV2K datasets only. After doing experiments, I'm sure that *
 
 
 **Other pictures' PSNR and SSIM are higher than these, but I think it is more clear. Don't mind it too much if you don't want to use it on security field and medical field.**  
-
+  
 ### Hint
-I deleted the **Flatten()** to achieve a FCN structure, and it is equal to use **GlobalAveragePool()**. It is ok for the discriminator in order to use a progressive training method, which is more stable and efficient.
+I deleted the **Flatten()** to achieve a FCN structure, and it is equal to use **GlobalAveragePooling()**. It is ok for the discriminator in order to use a progressive training method, which is more stable and efficient.
