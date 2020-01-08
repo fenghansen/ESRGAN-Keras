@@ -1,7 +1,7 @@
 # ESRGAN-Keras
 ### Implement of ESRGAN(https://arxiv.org/abs/1809.00219) with Keras  
-## It was programed based on https://github.com/MathiasGruber/SRGAN-Keras, and refered from https://github.com/SavaStevanovic/ESRGAN 
-## ESRGAN_demo.py has released. You can try your images by changing images under ./images/inputs.
+#### It was programed based on https://github.com/MathiasGruber/SRGAN-Keras, and refered from https://github.com/SavaStevanovic/ESRGAN 
+#### ESRGAN_demo.py has released. You can try your images by changing images under ./images/inputs.
 
 ***It is not finished totally, there are several bugs, but you can try to run ESRGAN_demo.py to have a test.   
 If you want to initially train a pleasant result by yourself, you'd better use 'RTC-SR.py' for a moment.***  
