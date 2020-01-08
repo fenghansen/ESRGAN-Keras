@@ -8,9 +8,9 @@ If you want to initially train a pleasant result by yourself, you'd better use '
   
 
 ## Environment: Python 3.6 + Keras 2.2.4 + Tensorflow 1.12 + PyCharm 2018
-## I have upload the conda_list.txt, which can make sure your environment works.(TF 1.14)
+### I have uploaded the conda_list.txt, which can make sure your environment works.(TF 1.14)
 
-I have upload the weights of my generator model(RRDB). You can use it after copying my generator model code. If you don't copy the model code, it may report some errors beacause I used 'tf.xxx' in my model.
+I have uploaded the weights of my generator model(RRDB). You can use it after copying my generator model code. If you don't copy the model code, it may report some errors beacause I used 'tf.xxx' in my model.
 
 To be honest, I recommand you to train your own discriminator due to the discriminator has several versions, and I'm not sure which one is better. You can add a Dropout(0.4) layer at the last of the discriminator to keep the training process stable (you'd better gradually decrease it to zero at last).
 
