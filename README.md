@@ -30,9 +30,9 @@ Don't mind the name of the third subtitle 'SRGAN'. It should be 'ESRGAN' (I forg
 ![Zebra in Set14](https://github.com/fenghansen/ESRGAN-Keras/blob/master/images/show/img_014_SRF_4_HR-Epoch99000.png)  
 ***The next two figures show how ESRGAN directly super-resolute the actual natural image. These two images are cropped from the original image of the DIV2K dataset. There is no "super-resolution original image" that can be compared, so their effects can truly reflect the actual application effect of super-resolution, rather than the reconstruction effect.***
 #### 002-(4,5) in DIV2K
-![002-(4,5) in DIV2K](https://github.com/fenghansen/ESRGAN-Keras/blob/master/images/outputs/2-(4,5)_ESRGAN.png)  
+![002-(4,5) in DIV2K](https://github.com/fenghansen/ESRGAN-Keras/blob/master/images/outputs/2-(4,5).png)  
 #### 050-(2,2) in DIV2K
-![050-(2,2) in DIV2K](https://github.com/fenghansen/ESRGAN-Keras/blob/master/images/outputs/50-(2,2)_ESRGAN.png)  
+![050-(2,2) in DIV2K](https://github.com/fenghansen/ESRGAN-Keras/blob/master/images/outputs/50-(2,2).png)  
 
 
 **Other pictures' PSNR and SSIM are higher than these, but I think it is more clear. Don't mind it too much if you don't want to use it on security field and medical field.**  
