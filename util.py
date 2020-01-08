@@ -3,7 +3,10 @@ import gc
 import numpy as np
 from PIL import Image
 from random import choice
-from skimage.measure import compare_psnr, compare_ssim
+try:
+    from skimage.measure import compare_psnr, compare_ssim
+except ModuleNotFoundError:
+    print(">> You'd better install scikit-image to support PSNR & SSIM comput")
 from keras.models import load_model
 from keras.utils import Sequence
 from tqdm import tqdm
@@ -173,7 +176,7 @@ class DataLoader(Sequence):
         return imgs_lr, imgs_hr
 
 
-def plot_test_images(model, loader, datapath_test, test_output, epoch, name='SRGAN-D', refer_model=None):
+def plot_test_images(model, loader, datapath_test, test_output, epoch, name='SRGAN', refer_model=None):
     """
     :param SRGAN model: The trained SRGAN model
     :param DataLoader loader: Instance of DataLoader for loading images
@@ -315,7 +318,7 @@ def plot_test_images(model, loader, datapath_test, test_output, epoch, name='SRG
     #     print(">> Could not perform printing. Maybe matplotlib is not installed.")
 
 
-def plot_bigger_images(model, loader, datapath_test, test_output, epoch, name='SRGAN-D', refer_model=None):
+def plot_bigger_images(model, loader, datapath_test, test_output, epoch, name='ESRGAN', refer_model=None):
     """
     :param SRGAN model: The trained SRGAN model
     :param DataLoader loader: Instance of DataLoader for loading images
@@ -324,117 +327,113 @@ def plot_bigger_images(model, loader, datapath_test, test_output, epoch, name='S
     :param int epoch: Identifier for how long the model has been trained
     """
 
-    try:
-        # SRResNet = load_model('./data/weights/DIV2K_generator.h5')
-        # Get the location of test images
-        test_images = [os.path.join(datapath_test, f) for f in os.listdir(datapath_test) if
-                       any(filetype in f.lower() for filetype in ['jpeg', 'png', 'jpg'])]
+    # Get the location of test images
+    test_images = [os.path.join(datapath_test, f) for f in os.listdir(datapath_test) if
+                    any(filetype in f.lower() for filetype in ['jpeg', 'png', 'jpg'])]
 
-        # Load the images to perform test on images
-        _, imgs_hr = loader.load_batch(img_paths=test_images, training=False, bicubic=False)
-        # Create super resolution and bicubic interpolation images
-        imgs_res = []
-        imgs_sr = []
-        imgs_bc = []
-        for i in range(len(test_images)):
+    # Load the images to perform test on images
+    _, imgs_hr = loader.load_batch(img_paths=test_images, training=False, bicubic=False)
+    # Create super resolution and bicubic interpolation images
+    imgs_res = []
+    imgs_sr = []
+    imgs_bc = []
+    for i in range(len(test_images)):
 
-            # Bicubic interpolation
-            pil_img = loader.unscale_hr_imgs(imgs_hr[i]).astype('uint8')
-            pil_img = Image.fromarray(pil_img)
-            hr_shape = (4*imgs_hr[i].shape[1], 4*imgs_hr[i].shape[0])
-            tmp_hr = loader.scale_lr_imgs(np.array(pil_img))
-            imgs_bc.append(
-                loader.scale_lr_imgs(
-                    np.array(pil_img.resize(hr_shape, resample=Image.BICUBIC))
-                )
+        # Bicubic interpolation
+        pil_img = loader.unscale_hr_imgs(imgs_hr[i]).astype('uint8')
+        pil_img = Image.fromarray(pil_img)
+        hr_shape = (4*imgs_hr[i].shape[1], 4*imgs_hr[i].shape[0])
+        tmp_hr = loader.scale_lr_imgs(np.array(pil_img))
+        imgs_bc.append(
+            loader.scale_lr_imgs(
+                np.array(pil_img.resize(hr_shape, resample=Image.BICUBIC))
             )
-            # refer_model prediction
-            if refer_model is not None:
-                imgs_res.append(
-                    np.squeeze(
-                        refer_model.predict(
-                            np.expand_dims(tmp_hr, 0),
-                            batch_size=1
-                        ),
-                        axis=0
-                    )
-                )
-            # SRGAN prediction
-            imgs_sr.append(
+        )
+        # refer_model prediction
+        if refer_model is not None:
+            imgs_res.append(
                 np.squeeze(
-                    model.generator.predict(
+                    refer_model.predict(
                         np.expand_dims(tmp_hr, 0),
                         batch_size=1
                     ),
                     axis=0
                 )
             )
+        # SRGAN prediction
+        imgs_sr.append(
+            np.squeeze(
+                model.generator.predict(
+                    np.expand_dims(tmp_hr, 0),
+                    batch_size=1
+                ),
+                axis=0
+            )
+        )
 
-        # Unscale colors values
-        imgs_bc = [loader.unscale_lr_imgs(img).astype(np.uint8) for img in imgs_bc]
-        imgs_hr = [loader.unscale_hr_imgs(img).astype(np.uint8) for img in imgs_hr]
-        if refer_model is not None:
-            imgs_res = [loader.unscale_hr_imgs(img).astype(np.uint8) for img in imgs_res]
-        imgs_sr = [loader.unscale_hr_imgs(img).astype(np.uint8) for img in imgs_sr]
+    # Unscale colors values
+    imgs_bc = [loader.unscale_lr_imgs(img).astype(np.uint8) for img in imgs_bc]
+    imgs_hr = [loader.unscale_hr_imgs(img).astype(np.uint8) for img in imgs_hr]
+    if refer_model is not None:
+        imgs_res = [loader.unscale_hr_imgs(img).astype(np.uint8) for img in imgs_res]
+    imgs_sr = [loader.unscale_hr_imgs(img).astype(np.uint8) for img in imgs_sr]
 
-        if refer_model is None:
-            # Loop through images
-            for img_hr, img_bc, img_sr, img_path in zip(imgs_hr, imgs_bc, imgs_sr, test_images):
-                # Get the filename
-                filename = os.path.basename(img_path).split(".")[0]
+    if refer_model is None:
+        # Loop through images
+        for img_hr, img_bc, img_sr, img_path in zip(imgs_hr, imgs_bc, imgs_sr, test_images):
+            # Get the filename
+            filename = os.path.basename(img_path).split(".")[0]
 
-                # Images and titles
-                images = {
-                    'Original': img_hr,
-                    'Bicubic Interpolation': img_bc,
-                    # 'SRResNet': img_res,
-                    name: img_sr,
-                }
-                plt.imsave(os.path.join(test_output, "{}_out.png".format(filename)), img_sr)
-                # Plot the images. Note: rescaling and using squeeze since we are getting batches of size 1
-                fig, axes = plt.subplots(1, 3, figsize=(30, 10))
-                for i, (title, img) in enumerate(images.items()):
-                    axes[i].imshow(img)
-                    axes[i].set_title("{} - {}".format(title, img.shape))
-                    axes[i].axis('off')
-                plt.suptitle('{}'.format(filename))
+            # Images and titles
+            images = {
+                'Original': img_hr,
+                'Bicubic Interpolation': img_bc,
+                # 'SRResNet': img_res,
+                name: img_sr,
+            }
+            plt.imsave(os.path.join(test_output, "{}_{}.png".format(filename, name)), img_sr)
+            # Plot the images. Note: rescaling and using squeeze since we are getting batches of size 1
+            fig, axes = plt.subplots(1, 3, figsize=(30, 10))
+            for i, (title, img) in enumerate(images.items()):
+                axes[i].imshow(img)
+                axes[i].set_title("{} - {}".format(title, img.shape))
+                axes[i].axis('off')
+            plt.suptitle('{}'.format(filename))
 
-                # Save directory
-                savefile = os.path.join(test_output, "{}.png".format(filename))
-                fig.savefig(savefile)
-                plt.close()
-                gc.collect()
+            # Save directory
+            savefile = os.path.join(test_output, "{}.png".format(filename))
+            fig.savefig(savefile)
+            plt.close()
+            gc.collect()
 
-        else:
-            # Loop through images
-            for img_hr, img_bc, img_res, img_sr, img_path in zip(imgs_hr, imgs_bc, imgs_res, imgs_sr, test_images):
-                # Get the filename
-                filename = os.path.basename(img_path).split(".")[0]
+    else:
+        # Loop through images
+        for img_hr, img_bc, img_res, img_sr, img_path in zip(imgs_hr, imgs_bc, imgs_res, imgs_sr, test_images):
+            # Get the filename
+            filename = os.path.basename(img_path).split(".")[0]
 
-                # Images and titles
-                images = {
-                    'Original': img_hr,
-                    'Bicubic Interpolation': img_bc,
-                    'SR-RRDB': img_res,
-                    'SRGAN-D': img_sr,
-                }
+            # Images and titles
+            images = {
+                'Original': img_hr,
+                'Bicubic Interpolation': img_bc,
+                'SR-RRDB': img_res,
+                name: img_sr,
+            }
 
-                plt.imsave(os.path.join(test_output, "{}_out.png".format(filename)), img_sr)
-                # Plot the images. Note: rescaling and using squeeze since we are getting batches of size 1
-                fig, axes = plt.subplots(1, 4, figsize=(40, 10))
-                for i, (title, img) in enumerate(images.items()):
-                    axes[i].imshow(img)
-                    axes[i].set_title("{} - {}".format(title, img.shape))
-                    axes[i].axis('off')
-                plt.suptitle('{}'.format(filename))
+            plt.imsave(os.path.join(test_output, "{}_{}.png".format(filename, name)), img_sr)
+            # Plot the images. Note: rescaling and using squeeze since we are getting batches of size 1
+            fig, axes = plt.subplots(1, 4, figsize=(40, 10))
+            for i, (title, img) in enumerate(images.items()):
+                axes[i].imshow(img)
+                axes[i].set_title("{} - {}".format(title, img.shape))
+                axes[i].axis('off')
+            plt.suptitle('{}'.format(filename))
 
-                # Save directory
-                savefile = os.path.join(test_output, "{}.png".format(filename))
-                fig.savefig(savefile)
-                plt.close()
-                gc.collect()
-    except Exception as e:
-        print(">> Could not perform printing. Maybe matplotlib is not installed.")
+            # Save directory
+            savefile = os.path.join(test_output, "{}.png".format(filename))
+            fig.savefig(savefile)
+            plt.close()
+            gc.collect()
 
 
 def plot_test_only(model, datapath_test, test_output):
@@ -480,4 +479,52 @@ def plot_test_only(model, datapath_test, test_output):
         plt.imsave(os.path.join(test_output, "test_original (%d).png" % (i+1)), img_sr)
         plt.close()
 
+def compute_metric(model, loader, datapath_test, test_output, epoch):
+    """
+    :param SRGAN model: The trained SRGAN model
+    :param DataLoader loader: Instance of DataLoader for loading images
+    :param str datapath_test: path to folder with testing images
+    :param string test_output: Directory path for outputting testing images
+    :param int epoch: Identifier for how long the model has been trained
+    """
 
+    try:
+        # SRResNet = load_model('./data/weights/DIV2K_generator.h5')
+        # Get the location of test images
+        test_images = [os.path.join(datapath_test, f) for f in os.listdir(datapath_test) if
+                       any(filetype in f.lower() for filetype in ['jpeg', 'png', 'jpg'])]
+
+        # Load the images to perform test on images
+        imgs_lr, imgs_hr = loader.load_batch(img_paths=test_images, training=False, bicubic=True)
+
+        # Create super resolution and bicubic interpolation images
+        imgs_sr = []
+        for i in range(len(test_images)):
+            # SRGAN prediction
+            imgs_sr.append(
+                np.squeeze(
+                    model.generator.predict(
+                        np.expand_dims(imgs_lr[i], 0),
+                        batch_size=1
+                    ),
+                    axis=0
+                )
+            )
+
+        # Unscale colors values
+        imgs_hr = [loader.unscale_hr_imgs(img).astype(np.uint8) for img in imgs_hr]
+        imgs_sr = [loader.unscale_hr_imgs(img).astype(np.uint8) for img in imgs_sr]
+        psnr = []
+        ssim = []
+        # Loop through images
+        for img_hr, img_sr, img_path in zip(imgs_hr, imgs_sr, test_images):
+            # Get the filename
+            filename = os.path.basename(img_path).split(".")[0]
+            plt.imsave(os.path.join(test_output, "{}_epoch{:05d}.png".format(filename, epoch)), img_sr)
+            # psnr.append("{:.4f}".format(compare_psnr(img_hr, img_sr)))
+            # ssim.append("{:.4f}".format(compare_ssim(img_hr, img_sr, multichannel=True)))
+
+        return psnr, ssim
+
+    except Exception as e:
+        print(">> Could not perform printing. Maybe matplotlib is not installed.")

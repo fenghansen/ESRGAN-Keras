@@ -319,8 +319,8 @@ class SRGAN():
 
         def comput_loss(x):
             real, fake = x
-            fake_logit = (fake - K.mean(real))
-            real_logit = (real - K.mean(fake))
+            fake_logit = K.sigmoid(fake - K.mean(real))
+            real_logit = K.sigmoid(real - K.mean(fake))
             return [fake_logit, real_logit]
 
         # Input LR images
